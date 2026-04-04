@@ -392,101 +392,93 @@ fetch_retry = retry(
 
 
 @fetch_retry
-def fetch_page(
-    url: str,
-    headless: bool = False,
-    proxy: Optional[str] = None,
-) -> str:
+def fetch_page(url: str, context: BrowserContext) -> str:
     """
-    The main orchestrator. Opens a stealthy Playwright browser,
-    navigates to the URL, simulates human behavior, checks for blocking,
+    The main orchestrator. Reuses a stealthy Playwright browser context,
+    opens a new tab for the URL, simulates human behavior, checks for blocking,
     scrolls to load dynamic content, and returns the fully rendered HTML.
     """
     general_log.info(f"{'='*50}")
     general_log.info(f"Fetching: {url}")
 
-    # Random pre-fetch delay
-    delay = random.uniform(2.0, 5.0)
-    general_log.info(f"Pre-fetch delay: {delay:.1f}s...")
-    time.sleep(delay)
-
+    page = None
     try:
-        with sync_playwright() as p:
-            browser, context = browser_initializer(p, headless=headless, proxy=proxy)
-            page = context.new_page()
+        page = context.new_page()
 
-            # Apply stealth patches
-            apply_stealth(page)
+        # Apply stealth patches
+        apply_stealth(page)
 
-            # Navigate
-            general_log.info("Navigating to target URL...")
-            response = page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            initial_status = response.status if response else 0
+        # Navigate
+        general_log.info("Navigating to target URL...")
+        response = page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        initial_status = response.status if response else 0
 
-            # Log status but don't abort yet — JS challenges may resolve
-            if initial_status in [403, 429]:
-                blocking_log.warning(f"HTTP {initial_status} received — waiting for JS challenge to resolve...")
-                time.sleep(random.uniform(5.0, 8.0))
+        # Log status but don't abort yet — JS challenges may resolve
+        if initial_status in [403, 429]:
+            blocking_log.warning(f"HTTP {initial_status} received — waiting for JS challenge to resolve...")
+            time.sleep(random.uniform(5.0, 8.0))
 
-            # Wait for network to settle
+        # Wait for network to settle
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            general_log.warning("Network did not reach idle state. Continuing with what we have...")
+
+        # Small pause to let JS render finish
+        time.sleep(random.uniform(2.0, 4.0))
+
+        # Re-check if page actually has content now (post-challenge)
+        page_text = page.evaluate("document.body ? document.body.innerText : ''").lower()
+
+        # If page is still showing a challenge or is empty, try waiting once more
+        challenge_words = ["checking your browser", "just a moment", "please wait", "enable javascript", "cloudflare"]
+        if any(w in page_text for w in challenge_words):
+            general_log.info("JS challenge page detected, waiting longer for resolution...")
+            time.sleep(random.uniform(8.0, 15.0))
             try:
                 page.wait_for_load_state("networkidle", timeout=20000)
             except Exception:
-                general_log.warning("Network did not reach idle state. Continuing with what we have...")
+                pass
 
-            # Small pause to let JS render finish
-            time.sleep(random.uniform(2.0, 4.0))
+        # Update page_text post-wait
+        page_text = page.evaluate("document.body ? document.body.innerText : ''").lower()
 
-            # Re-check if page actually has content now (post-challenge)
-            page_text = page.evaluate("document.body ? document.body.innerText : ''").lower()
+        # NOW check for real blocking (after JS has had time to resolve)
+        anti_bot_detection(page)
 
-            # If page is still showing a challenge or is empty, try waiting once more
-            challenge_words = ["checking your browser", "just a moment", "please wait", "enable javascript", "cloudflare"]
-            if any(w in page_text for w in challenge_words):
-                general_log.info("JS challenge page detected, waiting longer for resolution...")
-                time.sleep(random.uniform(8.0, 15.0))
-                try:
-                    page.wait_for_load_state("networkidle", timeout=20000)
-                except Exception:
-                    pass
+        # Simulate human behavior
+        human_behavior_simulator(page)
 
-            # Update page_text post-wait
-            page_text = page.evaluate("document.body ? document.body.innerText : ''").lower()
+        # Detect complexity
+        complexity = detect_page_complexity(page)
+        
+        # Click buttons to reveal phone/more
+        reveal_hidden_content(page)
+        
+        # Scroll to load lazy / infinite content
+        if complexity["has_lazy_loading"] or complexity["has_infinite_scroll"]:
+            scroll_to_load_all(page, max_scrolls=12)
+        else:
+            # Still scroll a bit even for static-looking pages
+            scroll_to_load_all(page, max_scrolls=5)
 
-            # NOW check for real blocking (after JS has had time to resolve)
-            anti_bot_detection(page)
+        # Re-check for reveals after scrolling (some appear late)
+        reveal_hidden_content(page)
+        
+        # Final anti-bot check after scrolling
+        anti_bot_detection(page)
 
-            # Simulate human behavior
-            human_behavior_simulator(page)
+        # Extract rendered HTML
+        html = page.content()
+        general_log.info(f"Page rendered. HTML size: {len(html)} bytes")
 
-            # Detect complexity
-            complexity = detect_page_complexity(page)
-            
-            # Click buttons to reveal phone/more
-            reveal_hidden_content(page)
-            
-            # Scroll to load lazy / infinite content
-            if complexity["has_lazy_loading"] or complexity["has_infinite_scroll"]:
-                scroll_to_load_all(page, max_scrolls=12)
-            else:
-                # Still scroll a bit even for static-looking pages
-                scroll_to_load_all(page, max_scrolls=5)
-
-            # Re-check for reveals after scrolling (some appear late)
-            reveal_hidden_content(page)
-            
-            # Final anti-bot check after scrolling
-            anti_bot_detection(page)
-
-            # Extract rendered HTML
-            html = page.content()
-            general_log.info(f"Page rendered. HTML size: {len(html)} bytes")
-
-            browser.close()
-            return html
+        return html
 
     except BlockingError:
         raise  # Propagate blocking errors cleanly
     except Exception as e:
         network_log.error(f"Fetch failed for {url}: {e}")
         raise ScraperError(f"Fetch failed: {e}")
+    finally:
+        if page:
+            page.close()
