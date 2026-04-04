@@ -78,29 +78,29 @@ def clean_business_profile(raw_profile: dict) -> dict:
     # Deep copy/init from schema
     clean = {
         "business": {
-            "name": normalize_text(raw_profile.get("name")) or "",
-            "owner": normalize_text(raw_profile.get("owner")) or "",
+            "name": normalize_text(raw_profile.get("name")) or None,
+            "owner": normalize_text(raw_profile.get("owner")) or None,
             "established": raw_profile.get("established"),
             "rating": raw_profile.get("rating"),
             "verified": raw_profile.get("verified"),
         },
         "contact": {
-            "phone": normalize_text(raw_profile.get("phone")) or "",
+            "phone": normalize_text(raw_profile.get("phone")) or None,
             "email": normalize_text(raw_profile.get("email")) or None,
         },
         "location": {
-            "address": normalize_text(raw_profile.get("address")) or "",
-            "city": normalize_text(raw_profile.get("city")) or "",
-            "postcode": normalize_text(raw_profile.get("postcode")) or "",
+            "address": normalize_text(raw_profile.get("address")) or None,
+            "city": normalize_text(raw_profile.get("city")) or None,
+            "postcode": normalize_text(raw_profile.get("postcode")) or None,
         },
         "credentials": {
-            "abn": normalize_text(raw_profile.get("abn")) or "",
+            "abn": normalize_text(raw_profile.get("abn")) or None,
             "licenses": raw_profile.get("licenses", {}) or {},
         },
         "services": raw_profile.get("services", []) or [],
-        "about": normalize_text(raw_profile.get("about")) or "",
+        "about": normalize_text(raw_profile.get("about")) or None,
         "media": {
-            "logo": raw_profile.get("logo") or "",
+            "logo": raw_profile.get("logo") or None,
             "gallery": raw_profile.get("gallery", []) or [],
         },
         "reviews": [],
@@ -109,10 +109,10 @@ def clean_business_profile(raw_profile: dict) -> dict:
     # Clean reviews
     for rev in raw_profile.get("reviews", []):
         clean["reviews"].append({
-            "name": normalize_text(rev.get("name")) or "",
-            "location": normalize_text(rev.get("location")) or "",
-            "date": normalize_text(rev.get("date")) or "",
-            "comment": normalize_text(rev.get("comment")) or "",
+            "name": normalize_text(rev.get("name")) or None,
+            "location": normalize_text(rev.get("location")) or None,
+            "date": normalize_text(rev.get("date")) or None,
+            "comment": normalize_text(rev.get("comment")) or None,
         })
 
     return clean
@@ -163,21 +163,22 @@ def clean_and_validate(raw_data: dict) -> dict:
 
     # 1. Process standard cards
     for product in raw_products:
-        name = normalize_text(product.get("Product Name"))
-        if not name or name in seen_names:
+        name = normalize_text(product.get("Product Name")) or None
+        if name and name in seen_names:
             continue
-        seen_names.add(name)
+        if name:
+            seen_names.add(name)
 
         cleaned = {
             "#": counter,
             "Product Name": name,
-            "Brand": normalize_text(product.get("Brand")) or "—",
-            "Sale Price": normalize_price(product.get("Sale Price")) or "—",
-            "Original Price": normalize_price(product.get("Original Price")) or "—",
-            "Discount (%)": normalize_text(product.get("Discount (%)")) or "—",
-            "Rating": normalize_text(product.get("Rating")) or "—",
-            "Product URL": product.get("Product URL", ""),
-            "Image URL": product.get("Image URL", ""),
+            "Brand": normalize_text(product.get("Brand")) or None,
+            "Sale Price": normalize_price(product.get("Sale Price")) or None,
+            "Original Price": normalize_price(product.get("Original Price")) or None,
+            "Discount (%)": normalize_text(product.get("Discount (%)")) or None,
+            "Rating": normalize_text(product.get("Rating")) or None,
+            "Product URL": product.get("Product URL") or None,
+            "Image URL": product.get("Image URL") or None,
         }
         cleaned_products.append(cleaned)
         counter += 1
@@ -186,21 +187,22 @@ def clean_and_validate(raw_data: dict) -> dict:
     for cluster in raw_discovery:
         category = normalize_text(cluster.get("Category", "General"))
         for item in cluster.get("Items", []):
-            name = normalize_text(item.get("Name"))
-            if not name or name in seen_names:
+            name = normalize_text(item.get("Name")) or None
+            if name and name in seen_names:
                 continue
-            seen_names.add(name)
+            if name:
+                seen_names.add(name)
 
             cleaned = {
                 "#": counter,
                 "Product Name": name,
                 "Brand": category,
                 "Sale Price": "Service / Category",
-                "Original Price": "—",
-                "Discount (%)": "—",
-                "Rating": "—",
-                "Product URL": item.get("URL", ""),
-                "Image URL": "—",
+                "Original Price": None,
+                "Discount (%)": None,
+                "Rating": None,
+                "Product URL": item.get("URL") or None,
+                "Image URL": None,
             }
             cleaned_products.append(cleaned)
             counter += 1

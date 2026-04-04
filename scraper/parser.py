@@ -491,9 +491,9 @@ def extract_product_cards(soup: BeautifulSoup, base_url: str = "") -> list:
 
         for idx, card in enumerate(cards, 1):
             # Extract basic info
-            txt = card.get_text(strip=True)[:100]
-            if not txt or txt in seen_card_texts: continue
-            seen_card_texts.add(txt)
+            card_id = str(card)[:500]
+            if not card_id or card_id in seen_card_texts: continue
+            seen_card_texts.add(card_id)
             
             product = {"#": len(final_cards) + 1}
 
@@ -571,8 +571,7 @@ def extract_product_cards(soup: BeautifulSoup, base_url: str = "") -> list:
             else:
                 product["Image URL"] = ""
 
-            if product.get("Product Name"):
-                final_cards.append(product)
+            final_cards.append(product)
 
     general_log.info(f"Extracted {len(final_cards)} total listing items.")
     return final_cards
@@ -603,8 +602,18 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
 
     # Contact (Phone/Email)
     text_content = soup.get_text(separator=" ")
-    profile["phone"] = PHONE_GENERIC.search(text_content).group(0) if PHONE_GENERIC.search(text_content) else None
-    profile["email"] = EMAIL_GENERIC.search(text_content).group(0) if EMAIL_GENERIC.search(text_content) else None
+    
+    tel_el = soup.find("a", href=re.compile(r'^tel:', re.I))
+    if tel_el:
+        profile["phone"] = tel_el["href"].replace("tel:", "").strip()
+    else:
+        profile["phone"] = PHONE_GENERIC.search(text_content).group(0) if PHONE_GENERIC.search(text_content) else None
+
+    mail_el = soup.find("a", href=re.compile(r'^mailto:', re.I))
+    if mail_el:
+        profile["email"] = mail_el["href"].replace("mailto:", "").strip()
+    else:
+        profile["email"] = EMAIL_GENERIC.search(text_content).group(0) if EMAIL_GENERIC.search(text_content) else None
 
     # Established
     est_match = re.search(r'(?:established|since|founded)\s*(?:in\s*)?([12]\d{3})', text_content, re.I)
@@ -635,7 +644,11 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
 
     # Look for Address patterns (e.g. 123 Street, Suburb, State Postcode)
     addr_match = re.search(r'(\d+[^,\n]+,\s*[^,\n]+,\s*[A-Z]{2,3}\s*(\d{4}))', text_content)
-    if addr_match:
+    map_link = soup.find("a", href=re.compile(r'maps\.google', re.I))
+    
+    if map_link and map_link.get_text(strip=True):
+        profile["address"] = map_link.get_text(strip=True)
+    elif addr_match:
         profile["address"] = addr_match.group(1).strip()
         profile["postcode"] = addr_match.group(2)
 

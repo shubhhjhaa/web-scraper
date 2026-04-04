@@ -92,10 +92,10 @@ STEALTH_SCRIPTS = [
 ]
 
 
-def apply_stealth(page) -> None:
+async def apply_stealth(page) -> None:
     """
     Applies all stealth patches to a Playwright page via init scripts.
     Call this BEFORE navigating to any URL.
     """
     for script in STEALTH_SCRIPTS:
-        page.add_init_script(script)
+        await page.add_init_script(script)
