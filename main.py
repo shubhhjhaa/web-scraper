@@ -4,15 +4,68 @@ import os
 import subprocess
 import sys
 import random
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
+from datetime import datetime
 
 from playwright.async_api import async_playwright
 from scraper.logger import general_log
-from scraper.network import fetch_page, BlockingError, browser_initializer
+from scraper.network import fetch_page, BlockingError, VPNDisconnectError, browser_initializer
 from scraper.parser import parse_data
 from scraper.cleaner import clean_and_validate, clean_business_profile
 from scraper.storage import cache_html, save_to_csv, save_to_txt, save_to_json, save_to_excel
+
+
+# ─── Sound Alert System ──────────────────────────────────────────────────────
+
+ALERT_SOUND_PATH = Path(__file__).parent / "alert.mpeg"
+_alert_played = threading.Event()  # Ensures sound plays only once per failure event
+
+
+def _play_alert_sound():
+    """Plays the alert sound in a background thread (only once per event)."""
+    if _alert_played.is_set():
+        return
+    _alert_played.set()
+
+    def _play():
+        try:
+            if not ALERT_SOUND_PATH.exists():
+                general_log.warning(f"Alert sound file not found: {ALERT_SOUND_PATH}")
+                return
+            # Use platform-native media player (no extra dependency issues)
+            if sys.platform == "win32":
+                os.startfile(str(ALERT_SOUND_PATH))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["afplay", str(ALERT_SOUND_PATH)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.Popen(["mpv", "--no-video", str(ALERT_SOUND_PATH)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            general_log.warning(f"Could not play alert sound: {e}")
+
+    threading.Thread(target=_play, daemon=True).start()
+
+
+def reset_alert():
+    """Resets the alert flag so it can fire again for the next event."""
+    _alert_played.clear()
+
+
+# ─── Blocking / VPN Callback ─────────────────────────────────────────────────
+
+def on_blocking_detected(url: str, reason: str):
+    """Callback fired by network layer on blocking or VPN disconnection."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print()
+    print("=" * 60)
+    print(f"  🚨 ALERT [{timestamp}]")
+    print(f"  URL:    {url}")
+    print(f"  Reason: {reason}")
+    print("=" * 60)
+    print()
+    general_log.critical(f"🚨 BLOCKING ALERT — {reason} — {url}")
+    _play_alert_sound()
 
 
 def detect_mode(url: str) -> str:
@@ -29,8 +82,9 @@ def detect_mode(url: str) -> str:
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
-║              ADVANCED STEALTH WEB SCRAPER                   ║
-║          Playwright-Powered · Anti-Detection Engine         ║
+║              ADVANCED STEALTH WEB SCRAPER v2.0               ║
+║     Playwright-Powered · Anti-Detection · Smart Retry        ║
+║        10x Concurrency · VPN Alert · Sound Notifier          ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -68,13 +122,14 @@ def save_outputs(cleaned_data: list, chosen_formats: list) -> list:
     return saved_files
 
 
-async def process_single_url(context, url: str) -> list:
+# ─── Core URL Processor (unchanged extraction logic) ─────────────────────────
+
+async def process_single_url(context, url: str, index: int, total: int) -> list:
     """Processes a single URL and returns a list of cleaned data objects."""
     mode = detect_mode(url)
     general_log.info("=" * 60)
-    general_log.info(f"Target URL:    {url}")
-    general_log.info(f"Domain:        {extract_domain(url)}")
-    general_log.info(f"Detected Mode: {mode.upper()}")
+    general_log.info(f"[{index}/{total}] Target URL: {url}")
+    general_log.info(f"Domain: {extract_domain(url)} | Mode: {mode.upper()}")
     general_log.info("=" * 60)
 
     if not url.startswith("http"):
@@ -83,9 +138,12 @@ async def process_single_url(context, url: str) -> list:
 
     # ── Step 1: Fetch Page ──
     try:
-        html = await fetch_page(url, context)
+        html = await fetch_page(url, context, on_blocking_detected=on_blocking_detected)
     except BlockingError as e:
         general_log.critical(f"BLOCKED fetching {url}: {e}")
+        return []
+    except VPNDisconnectError as e:
+        general_log.critical(f"VPN/NETWORK DOWN for {url}: {e}")
         return []
     except Exception as e:
         general_log.critical(f"FATAL NETWORK ERROR for {url}: {e}")
@@ -100,7 +158,7 @@ async def process_single_url(context, url: str) -> list:
     # ── Step 2: Cache Raw HTML ──
     cache_html(html, url)
 
-    # ── Step 3: Parse & Clean ──
+    # ── Step 3: Parse & Clean (UNCHANGED EXTRACTION LOGIC) ──
     raw_data = parse_data(html, url, mode=mode)
     
     cleaned_data = []
@@ -117,7 +175,7 @@ async def process_single_url(context, url: str) -> list:
         for i, p_url in enumerate(profile_links, 1):
             general_log.info(f"--- Scraping Profile {i}/{len(profile_links)}: {p_url} ---")
             try:
-                p_html = await fetch_page(p_url, context)
+                p_html = await fetch_page(p_url, context, on_blocking_detected=on_blocking_detected)
                 if p_html:
                     p_raw = parse_data(p_html, p_url, mode="profile")
                     p_clean = clean_business_profile(p_raw)
@@ -130,9 +188,182 @@ async def process_single_url(context, url: str) -> list:
     return cleaned_data
 
 
+# ─── Batch Processing Engine ─────────────────────────────────────────────────
+
+async def run_batch(
+    context,
+    urls: list,
+    all_collected_data: list,
+    successful_urls: list,
+    failed_urls: list,
+    batch_size: int = 10,
+    global_offset: int = 0,
+):
+    """Process URLs in controlled async batches using a semaphore."""
+    total = len(urls) + global_offset
+    sem = asyncio.Semaphore(batch_size)
+
+    async def sem_process(url, idx):
+        async with sem:
+            return await process_single_url(context, url, idx, total)
+
+    for i in range(0, len(urls), batch_size):
+        chunk = urls[i:i + batch_size]
+        batch_num = i // batch_size + 1
+        chunk_start = i + global_offset + 1
+        chunk_end = min(i + batch_size, len(urls)) + global_offset
+
+        print(f"\n{'─' * 60}")
+        print(f"  📦 Batch {batch_num}  |  Processing {chunk_start}-{chunk_end} / {total}")
+        print(f"{'─' * 60}")
+
+        tasks = [
+            sem_process(url, i + j + global_offset + 1)
+            for j, url in enumerate(chunk)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for output, target_url in zip(results, chunk):
+            if isinstance(output, Exception):
+                general_log.error(f"Unexpected error processing {target_url}: {output}")
+                failed_urls.append(target_url)
+            elif output:
+                all_collected_data.extend(output)
+                successful_urls.append(target_url)
+                print(f"  ✅ Done: {target_url} ({len(output)} records)")
+            else:
+                failed_urls.append(target_url)
+                general_log.warning(f"No data extracted from: {target_url}")
+                print(f"  ❌ Failed: {target_url}")
+
+        done_count = min(i + batch_size, len(urls)) + global_offset
+        print(f"\n  📊 Progress: {done_count} / {total}  |  "
+              f"✅ {len(successful_urls)}  ❌ {len(failed_urls)}")
+
+        # Tiny throttle between batches to avoid IP block cascades
+        if (i + batch_size) < len(urls):
+            delay = random.uniform(1.0, 3.0)
+            print(f"  ⏳ Throttling {delay:.1f}s before next batch...")
+            await asyncio.sleep(delay)
+
+
+# ─── Final Summary ───────────────────────────────────────────────────────────
+
+def print_summary(
+    total_urls: int,
+    successful_urls: list,
+    failed_urls: list,
+    all_collected_data: list,
+    saved_files: list,
+):
+    """Prints a comprehensive final summary."""
+    item_label = f"Total Business Profiles Extracted: {len(all_collected_data)}"
+    output_dir = Path("output").resolve()
+
+    print("\n" + "═" * 60)
+    print("  ✅ SCRAPING COMPLETED!")
+    print("═" * 60)
+    print(f"  {item_label}")
+    print(f"  Total URLs Processed: {total_urls}")
+    print(f"  ✅ Successful: {len(successful_urls)}")
+    print(f"  ❌ Failed:     {len(failed_urls)}")
+    print()
+
+    if successful_urls:
+        print("  ── Successful URLs ──")
+        for su in successful_urls:
+            print(f"    ✅ {su}")
+        print()
+
+    if failed_urls:
+        print("  ── Failed URLs ──")
+        for fu in failed_urls:
+            print(f"    ❌ {fu}")
+        print()
+
+    if saved_files:
+        print("  📁 Generated Files:")
+        for fpath in saved_files:
+            print(f"     → {fpath}")
+    print()
+    print(f"  📂 Output Folder: {output_dir}")
+    print(f"  📋 Logs Folder:   {Path('.logs').resolve()}")
+    print("═" * 60 + "\n")
+
+
+# ─── Retry Failed URLs ───────────────────────────────────────────────────────
+
+async def retry_failed_urls(
+    context,
+    failed_urls: list,
+    all_collected_data: list,
+    successful_urls: list,
+    chosen_formats: list,
+):
+    """Retry only the failed URLs using the same scraping logic."""
+    print("\n" + "─" * 60)
+    print(f"  🔄 RETRYING {len(failed_urls)} FAILED URLs...")
+    print("─" * 60)
+
+    retry_failed = []
+    retry_success = []
+
+    # Reset alert so it can fire again during retry
+    reset_alert()
+
+    await run_batch(
+        context=context,
+        urls=failed_urls,
+        all_collected_data=all_collected_data,
+        successful_urls=retry_success,
+        failed_urls=retry_failed,
+        batch_size=10,
+        global_offset=0,
+    )
+
+    # Update the main lists
+    successful_urls.extend(retry_success)
+
+    # Save updated data
+    saved_files = []
+    if all_collected_data:
+        saved_files = save_outputs(all_collected_data, chosen_formats)
+
+    print("\n" + "═" * 60)
+    print("  🔄 RETRY RESULTS")
+    print("═" * 60)
+    print(f"  Retried: {len(failed_urls)} URLs")
+    print(f"  ✅ Now Successful: {len(retry_success)}")
+    print(f"  ❌ Still Failed:   {len(retry_failed)}")
+    print()
+
+    if retry_success:
+        print("  ── Recovered URLs ──")
+        for su in retry_success:
+            print(f"    ✅ {su}")
+        print()
+
+    if retry_failed:
+        print("  ── Permanently Failed URLs ──")
+        for fu in retry_failed:
+            print(f"    ❌ {fu}")
+        print()
+
+    if saved_files:
+        print("  📁 Updated Files:")
+        for fpath in saved_files:
+            print(f"     → {fpath}")
+    print("═" * 60 + "\n")
+
+    return retry_failed
+
+
+# ─── Main Async Entry Point ──────────────────────────────────────────────────
+
 async def main_async(url_input: str, headless: bool, proxy: str = None, formats: str = None):
     print(BANNER)
     general_log.info(f"Browser:       {'Headless' if headless else 'Headful'}")
+    general_log.info(f"Concurrency:   10 parallel tabs (controlled semaphore)")
 
     urls = []
     if os.path.isfile(url_input):
@@ -155,90 +386,65 @@ async def main_async(url_input: str, headless: bool, proxy: str = None, formats:
     successful_urls = []
     failed_urls = []
     
-    # Controlled concurrency logic
-    BATCH_SIZE = 4 
+    BATCH_SIZE = 10  # Increased from 4 → 10
 
     async with async_playwright() as p:
         browser, context = await browser_initializer(p, headless=headless, proxy=proxy)
         try:
-            for i in range(0, len(urls), BATCH_SIZE):
-                chunk = urls[i:i+BATCH_SIZE]
-                general_log.info(f"\n>>> Processing Batch {i//BATCH_SIZE + 1} ({len(chunk)} target URLs concurrently)...")
-                
-                tasks = [process_single_url(context, u) for u in chunk]
-                # Gather concurrent background tabs
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                for output, target_url in zip(results, chunk):
-                    if isinstance(output, Exception):
-                        general_log.error(f"Unexpected error processing {target_url}: {output}")
-                        failed_urls.append(target_url)
-                    elif output:  # list with elements
-                        all_collected_data.extend(output)
-                        successful_urls.append(target_url)
-                        print(f"Extracted data from: {target_url} (Found {len(output)} records)")
+            # ── Main Scraping Run ──
+            await run_batch(
+                context=context,
+                urls=urls,
+                all_collected_data=all_collected_data,
+                successful_urls=successful_urls,
+                failed_urls=failed_urls,
+                batch_size=BATCH_SIZE,
+            )
+
+            # ── Save Output ──
+            saved_files = []
+            if all_collected_data:
+                saved_files = save_outputs(all_collected_data, chosen)
+            else:
+                general_log.warning("No valid data collected to save.")
+
+            # ── Final Summary ──
+            print_summary(
+                total_urls=len(urls),
+                successful_urls=successful_urls,
+                failed_urls=failed_urls,
+                all_collected_data=all_collected_data,
+                saved_files=saved_files,
+            )
+
+            # ── Retry Prompt ──
+            if failed_urls:
+                try:
+                    answer = input(f"\n  🔄 {len(failed_urls)} URLs failed. Do you want to retry failed URLs? (yes/no): ").strip().lower()
+                    if answer in ("yes", "y"):
+                        still_failed = await retry_failed_urls(
+                            context=context,
+                            failed_urls=failed_urls.copy(),
+                            all_collected_data=all_collected_data,
+                            successful_urls=successful_urls,
+                            chosen_formats=chosen,
+                        )
+                        # Final updated summary
+                        if still_failed:
+                            print(f"  ℹ️  {len(still_failed)} URLs remain failed after retry.\n")
+                        else:
+                            print("  🎉 All previously failed URLs recovered successfully!\n")
                     else:
-                        failed_urls.append(target_url)
-                        general_log.warning(f"No data extracted from: {target_url}")
-                        
-                print(f"Batch Done. Overall Progress: {min(i + BATCH_SIZE, len(urls))}/{len(urls)}")
-                
-                # Tiny throttle between batches to avoid IP block cascades
-                if (i + BATCH_SIZE) < len(urls):
-                    await asyncio.sleep(random.uniform(1.0, 3.0))
+                        print("  ⏩ Skipping retry.\n")
+                except EOFError:
+                    print("  ⏩ Non-interactive mode, skipping retry.\n")
         finally:
             await browser.close()
-
-    item_label = f"Total Business Profiles Extracted: {len(all_collected_data)}"
-
-    # ── Save Output Logic ──
-    if not formats:
-        print("\n" + "=" * 50)
-        print(f"  {item_label}")
-        print("  Generating strict nested JSON format...")
-        print("=" * 50)
-
-    saved_files = []
-    if all_collected_data:
-        saved_files = save_outputs(all_collected_data, chosen)
-    else:
-        general_log.warning("No valid data collected to save.")
-
-    output_dir = Path("output").resolve()
-
-    print("\n" + "=" * 60)
-    print("  ✅ SCRAPING COMPLETED SUCCESSFULLY!")
-    print("=" * 60)
-    print(f"  {item_label}")
-    print(f"  Total URLs processed: {len(urls)}")
-    print(f"  Successful: {len(successful_urls)}")
-    print(f"  Failed: {len(failed_urls)}\n")
-
-    if successful_urls:
-        print("  Successful URLs:")
-        for su in successful_urls:
-            print(f"  - {su}")
-        print()
-
-    if failed_urls:
-        print("  Failed URLs:")
-        for fu in failed_urls:
-            print(f"  - {fu}")
-        print()
-
-    if saved_files:
-        print("  📁 Generated Files:")
-        for fpath in saved_files:
-            print(f"     → {fpath}")
-    print()
-    print(f"  📂 Output Folder: {output_dir}")
-    print(f"  📋 Logs Folder:   {Path('.logs').resolve()}")
-    print("=" * 60 + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Advanced Stealth Web Scraper — Playwright Async + Deep DOM Engine.",
+        description="Advanced Stealth Web Scraper v2.0 — 10x Concurrency + Smart Retry + VPN Alerts.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("url", nargs="?", default=None, help="Target URL, comma-separated URLs, or path to text file containing URLs")

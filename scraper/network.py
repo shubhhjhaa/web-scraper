@@ -1,7 +1,7 @@
 import asyncio
 import random
 import math
-from typing import Optional
+from typing import Optional, Callable
 from fake_useragent import UserAgent
 from playwright.async_api import async_playwright, Page, BrowserContext, Browser
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
@@ -18,6 +18,24 @@ class ScraperError(Exception):
 class BlockingError(Exception):
     """Error raised when CAPTCHA, anti-bot, or 403/429 is detected."""
     pass
+
+class VPNDisconnectError(Exception):
+    """Error raised when VPN or network connectivity loss is detected."""
+    pass
+
+# ─── VPN / Connectivity Signals ────────────────────────────────────────────────
+
+VPN_DISCONNECT_SIGNALS = [
+    "net::err_connection_reset",
+    "net::err_connection_refused",
+    "net::err_network_changed",
+    "net::err_internet_disconnected",
+    "net::err_name_not_resolved",
+    "net::err_tunnel_connection_failed",
+    "net::err_proxy_connection_failed",
+    "net::err_connection_timed_out",
+    "net::err_socks_connection_failed",
+]
 
 # ─── Viewport & Device Profiles ───────────────────────────────────────────────
 
@@ -216,17 +234,37 @@ fetch_retry = retry(
 )
 
 @fetch_retry
-async def fetch_page(url: str, context: BrowserContext) -> str:
+async def fetch_page(
+    url: str,
+    context: BrowserContext,
+    on_blocking_detected: Optional[Callable] = None,
+) -> str:
     general_log.info(f"Fetching: {url}")
     page = None
     try:
         page = await context.new_page()
         await apply_stealth(page)
 
-        response = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        try:
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        except Exception as nav_err:
+            err_msg = str(nav_err).lower()
+            for signal in VPN_DISCONNECT_SIGNALS:
+                if signal in err_msg:
+                    reason = f"VPN/Network disconnect detected: '{signal}'"
+                    blocking_log.critical(reason)
+                    if on_blocking_detected:
+                        on_blocking_detected(url, reason)
+                    raise VPNDisconnectError(reason)
+            raise ScraperError(f"Navigation failed: {nav_err}")
+
         initial_status = response.status if response else 0
 
         if initial_status in [403, 429]:
+            reason = f"HTTP {initial_status} — possible blocking"
+            blocking_log.warning(reason)
+            if on_blocking_detected:
+                on_blocking_detected(url, reason)
             await asyncio.sleep(random.uniform(3.0, 5.0))
 
         try:
@@ -234,7 +272,13 @@ async def fetch_page(url: str, context: BrowserContext) -> str:
         except Exception:
             pass
 
-        await anti_bot_detection(page)
+        try:
+            await anti_bot_detection(page)
+        except BlockingError as be:
+            if on_blocking_detected:
+                on_blocking_detected(url, str(be))
+            raise
+
         await human_behavior_simulator(page)
         
         complexity = await detect_page_complexity(page)
@@ -246,12 +290,28 @@ async def fetch_page(url: str, context: BrowserContext) -> str:
             await scroll_to_load_all(page, max_scrolls=3)
 
         await reveal_hidden_content(page)
-        await anti_bot_detection(page)
 
+        try:
+            await anti_bot_detection(page)
+        except BlockingError as be:
+            if on_blocking_detected:
+                on_blocking_detected(url, str(be))
+            raise
+
+        # ── Empty page detection ──
         html = await page.content()
+        if html and len(html.strip()) < 500:
+            body_text = await page.evaluate("document.body ? document.body.innerText.trim() : ''")
+            if len(body_text) < 50:
+                reason = "Empty or incomplete page load detected"
+                blocking_log.warning(f"{reason} for {url}")
+                if on_blocking_detected:
+                    on_blocking_detected(url, reason)
+                raise BlockingError(reason)
+
         return html
 
-    except BlockingError:
+    except (BlockingError, VPNDisconnectError):
         raise
     except Exception as e:
         raise ScraperError(f"Fetch failed: {e}")
