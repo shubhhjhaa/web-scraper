@@ -1,0 +1,11 @@
+{
+    "files.exclude": {
+        "venv": true,
+        ".cache": true,
+        ".git": true,
+        "__pycache__": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true
+    },
+    "explorer.sortOrder": "type"
+}
