@@ -1,13 +1,18 @@
 import asyncio
 import argparse
 import os
-import subprocess
 import sys
 import random
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
+
+# Windows fallback for sound
+try:
+    import winsound
+except ImportError:
+    winsound = None
 
 from playwright.async_api import async_playwright
 from scraper.logger import general_log
@@ -18,54 +23,125 @@ from scraper.storage import cache_html, save_to_csv, save_to_txt, save_to_json, 
 
 
 # ─── Sound Alert System ──────────────────────────────────────────────────────
+# Global blocking detection with single-fire alert.
+# How it works:
+#   • _is_blocked = False  →  system is "clear"
+#   • First block detected →  play sound ONCE, set _is_blocked = True
+#   • Subsequent blocks   →  NO sound (already alerting)
+#   • Successful request   →  reset _is_blocked = False
+#   • Next new block       →  sound fires again (new disconnection event)
+
+# ── Master Toggle: set to True to re-enable alert sounds & banners ──
+ENABLE_ALERT = False
 
 ALERT_SOUND_PATH = Path(__file__).parent / "alert.mpeg"
-_alert_played = threading.Event()  # Ensures sound plays only once per failure event
+
+_is_blocked = False               # Global state: True = currently in a blocked state
+_alert_lock = threading.Lock()    # Thread-safe guard for alert state
+
+def reset_blocking_state():
+    """Resets the blocked flag (called on successful network requests)."""
+    global _is_blocked
+    with _alert_lock:
+        if _is_blocked:
+            _is_blocked = False
+            general_log.info("Resetting global blocking state (successful request).")
 
 
 def _play_alert_sound():
-    """Plays the alert sound in a background thread (only once per event)."""
-    if _alert_played.is_set():
+    """
+    Plays the alert sound ONCE for a new disconnection event.
+    Uses pygame at 80% volume; falls back to native Windows beep.
+    Called only when _is_blocked transitions from False → True.
+    Respects the ENABLE_ALERT toggle.
+    """
+    if not ENABLE_ALERT:
+        general_log.debug("Alert sound skipped (ENABLE_ALERT = False).")
         return
-    _alert_played.set()
 
-    def _play():
+    def _play_worker():
+        # --- PHASE 1: Try Pygame (High Quality) ---
         try:
+            import pygame
+
             if not ALERT_SOUND_PATH.exists():
                 general_log.warning(f"Alert sound file not found: {ALERT_SOUND_PATH}")
-                return
-            # Use platform-native media player (no extra dependency issues)
-            if sys.platform == "win32":
-                os.startfile(str(ALERT_SOUND_PATH))
-            elif sys.platform == "darwin":
-                subprocess.Popen(["afplay", str(ALERT_SOUND_PATH)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Fallthrough to winsound below
             else:
-                subprocess.Popen(["mpv", "--no-video", str(ALERT_SOUND_PATH)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+
+                pygame.mixer.music.load(str(ALERT_SOUND_PATH.resolve()))
+                pygame.mixer.music.set_volume(0.80)
+                pygame.mixer.music.play()
+
+                while pygame.mixer.music.get_busy():
+                    pygame.time.Clock().tick(10)
+
+                general_log.info("🔊 Alert sound played via pygame at 80% volume.")
+                return  # Success!
+
         except Exception as e:
-            general_log.warning(f"Could not play alert sound: {e}")
+            general_log.warning(f"Pygame sound failed (falling back to winsound): {e}")
 
-    threading.Thread(target=_play, daemon=True).start()
+        # --- PHASE 2: Fallback to Native Windows (Very Reliable) ---
+        if winsound:
+            try:
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                general_log.info("🔔 Alert sound played via Windows MessageBeep (fallback).")
+            except Exception as be:
+                general_log.error(f"Fallback sound also failed: {be}")
+        else:
+            print("\a")  # Final beep fallback
+            general_log.warning("No audio system available. Triggered system console beep (\\a).")
+
+    # Fire in background thread so it doesn't block scraping
+    threading.Thread(target=_play_worker, daemon=True).start()
 
 
-def reset_alert():
-    """Resets the alert flag so it can fire again for the next event."""
-    _alert_played.clear()
+def reset_alert_for_new_session():
+    """Resets the alert state — call at the start of a session or a retry task."""
+    global _is_blocked
+    with _alert_lock:
+        _is_blocked = False
+    general_log.info("Alert and blocking state reset for new session.")
 
 
 # ─── Blocking / VPN Callback ─────────────────────────────────────────────────
 
 def on_blocking_detected(url: str, reason: str):
-    """Callback fired by network layer on blocking or VPN disconnection."""
+    """
+    Callback fired by network layer on blocking or VPN disconnection.
+    
+    First detection  →  full console banner + alert sound + set _is_blocked = True
+    Subsequent hits  →  compact one-line log (no sound, no banner spam)
+    """
+    global _is_blocked
+
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print()
-    print("=" * 60)
-    print(f"  🚨 ALERT [{timestamp}]")
-    print(f"  URL:    {url}")
-    print(f"  Reason: {reason}")
-    print("=" * 60)
-    print()
-    general_log.critical(f"🚨 BLOCKING ALERT — {reason} — {url}")
-    _play_alert_sound()
+    general_log.critical(f"🚨 BLOCKING — {reason} — {url}")
+
+    with _alert_lock:
+        if not _is_blocked:
+            # ── First block in this disconnection event ──
+            _is_blocked = True
+            if ENABLE_ALERT:
+                print()
+                print("🚨" * 20)
+                print(f"  🚨🚨🚨  BLOCKING ALERT  [{timestamp}]  🚨🚨🚨")
+                print(f"  URL:    {url}")
+                print(f"  Reason: {reason}")
+                print("🚨" * 20)
+                print()
+                _play_alert_sound()
+            else:
+                general_log.info(f"Block detected (alerts disabled): {url} — {reason}")
+            general_log.info(f"Global blocked state: ON (first block at {url})")
+        else:
+            # ── Already blocked — compact output, NO sound ──
+            if ENABLE_ALERT:
+                print(f"  🚨 [{timestamp}] Still blocked — {url} ({reason})")
+            general_log.debug(f"Subsequent block (suppressed sound): {url}")
 
 
 def detect_mode(url: str) -> str:
@@ -139,6 +215,9 @@ async def process_single_url(context, url: str, index: int, total: int) -> list:
     # ── Step 1: Fetch Page ──
     try:
         html = await fetch_page(url, context, on_blocking_detected=on_blocking_detected)
+        # SUCCESS: Reset blocking state if fetch succeeded
+        if html:
+            reset_blocking_state()
     except BlockingError as e:
         general_log.critical(f"BLOCKED fetching {url}: {e}")
         return []
@@ -177,6 +256,7 @@ async def process_single_url(context, url: str, index: int, total: int) -> list:
             try:
                 p_html = await fetch_page(p_url, context, on_blocking_detected=on_blocking_detected)
                 if p_html:
+                    reset_blocking_state()
                     p_raw = parse_data(p_html, p_url, mode="profile")
                     p_clean = clean_business_profile(p_raw)
                     cleaned_data.append(p_clean)
@@ -203,9 +283,19 @@ async def run_batch(
     total = len(urls) + global_offset
     sem = asyncio.Semaphore(batch_size)
 
+    processed_count = 0
+    progress_lock = asyncio.Lock()
+
     async def sem_process(url, idx):
-        async with sem:
-            return await process_single_url(context, url, idx, total)
+        nonlocal processed_count
+        try:
+            async with sem:
+                return await process_single_url(context, url, idx, total)
+        finally:
+            async with progress_lock:
+                processed_count += 1
+                # Display immediate completion status after each URL regardless of success/failure
+                print(f"  🏁 Completed: {processed_count + global_offset} / {total}")
 
     for i in range(0, len(urls), batch_size):
         chunk = urls[i:i + batch_size]
@@ -309,7 +399,7 @@ async def retry_failed_urls(
     retry_success = []
 
     # Reset alert so it can fire again during retry
-    reset_alert()
+    reset_alert_for_new_session()
 
     await run_batch(
         context=context,
@@ -361,6 +451,9 @@ async def retry_failed_urls(
 # ─── Main Async Entry Point ──────────────────────────────────────────────────
 
 async def main_async(url_input: str, headless: bool, proxy: str = None, formats: str = None):
+    # Reset alert flag at the start of a new scraping session
+    reset_alert_for_new_session()
+    
     print(BANNER)
     general_log.info(f"Browser:       {'Headless' if headless else 'Headful'}")
     general_log.info(f"Concurrency:   10 parallel tabs (controlled semaphore)")
