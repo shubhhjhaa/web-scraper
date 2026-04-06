@@ -3,16 +3,16 @@ import argparse
 import os
 import sys
 import random
-import threading
+# import threading  # Only needed for alarm system
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
 
-# Windows fallback for sound
-try:
-    import winsound
-except ImportError:
-    winsound = None
+# # Windows fallback for sound
+# try:
+#     import winsound
+# except ImportError:
+#     winsound = None
 
 from playwright.async_api import async_playwright
 from scraper.logger import general_log
@@ -22,126 +22,139 @@ from scraper.cleaner import clean_and_validate, clean_business_profile
 from scraper.storage import cache_html, save_to_csv, save_to_txt, save_to_json, save_to_excel
 
 
-# ─── Sound Alert System ──────────────────────────────────────────────────────
-# Global blocking detection with single-fire alert.
-# How it works:
-#   • _is_blocked = False  →  system is "clear"
-#   • First block detected →  play sound ONCE, set _is_blocked = True
-#   • Subsequent blocks   →  NO sound (already alerting)
-#   • Successful request   →  reset _is_blocked = False
-#   • Next new block       →  sound fires again (new disconnection event)
+# # ─── Sound Alert System (COMMENTED OUT) ─────────────────────────────────────
+# # Global blocking detection with single-fire alert.
+# # How it works:
+# #   • _is_blocked = False  →  system is "clear"
+# #   • First block detected →  play sound ONCE, set _is_blocked = True
+# #   • Subsequent blocks   →  NO sound (already alerting)
+# #   • Successful request   →  reset _is_blocked = False
+# #   • Next new block       →  sound fires again (new disconnection event)
+#
+# # ── Master Toggle: set to True to re-enable alert sounds & banners ──
+# ENABLE_ALERT = False
+#
+# ALERT_SOUND_PATH = Path(__file__).parent / "alert.mpeg"
+#
+# _is_blocked = False               # Global state: True = currently in a blocked state
+# _alert_lock = threading.Lock()    # Thread-safe guard for alert state
+#
+# def reset_blocking_state():
+#     """Resets the blocked flag (called on successful network requests)."""
+#     global _is_blocked
+#     with _alert_lock:
+#         if _is_blocked:
+#             _is_blocked = False
+#             general_log.info("Resetting global blocking state (successful request).")
+#
+#
+# def _play_alert_sound():
+#     """
+#     Plays the alert sound ONCE for a new disconnection event.
+#     Uses pygame at 80% volume; falls back to native Windows beep.
+#     Called only when _is_blocked transitions from False → True.
+#     Respects the ENABLE_ALERT toggle.
+#     """
+#     if not ENABLE_ALERT:
+#         general_log.debug("Alert sound skipped (ENABLE_ALERT = False).")
+#         return
+#
+#     def _play_worker():
+#         # --- PHASE 1: Try Pygame (High Quality) ---
+#         try:
+#             import pygame
+#
+#             if not ALERT_SOUND_PATH.exists():
+#                 general_log.warning(f"Alert sound file not found: {ALERT_SOUND_PATH}")
+#                 # Fallthrough to winsound below
+#             else:
+#                 if not pygame.mixer.get_init():
+#                     pygame.mixer.init()
+#
+#                 pygame.mixer.music.load(str(ALERT_SOUND_PATH.resolve()))
+#                 pygame.mixer.music.set_volume(0.80)
+#                 pygame.mixer.music.play()
+#
+#                 while pygame.mixer.music.get_busy():
+#                     pygame.time.Clock().tick(10)
+#
+#                 general_log.info("🔊 Alert sound played via pygame at 80% volume.")
+#                 return  # Success!
+#
+#         except Exception as e:
+#             general_log.warning(f"Pygame sound failed (falling back to winsound): {e}")
+#
+#         # --- PHASE 2: Fallback to Native Windows (Very Reliable) ---
+#         if winsound:
+#             try:
+#                 winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+#                 general_log.info("🔔 Alert sound played via Windows MessageBeep (fallback).")
+#             except Exception as be:
+#                 general_log.error(f"Fallback sound also failed: {be}")
+#         else:
+#             print("\a")  # Final beep fallback
+#             general_log.warning("No audio system available. Triggered system console beep (\\a).")
+#
+#     # Fire in background thread so it doesn't block scraping
+#     threading.Thread(target=_play_worker, daemon=True).start()
+#
+#
+# def reset_alert_for_new_session():
+#     """Resets the alert state — call at the start of a session or a retry task."""
+#     global _is_blocked
+#     with _alert_lock:
+#         _is_blocked = False
+#     general_log.info("Alert and blocking state reset for new session.")
 
-# ── Master Toggle: set to True to re-enable alert sounds & banners ──
-ENABLE_ALERT = False
 
-ALERT_SOUND_PATH = Path(__file__).parent / "alert.mpeg"
+# # ─── Blocking / VPN Callback (COMMENTED OUT) ────────────────────────────────
+#
+# def on_blocking_detected(url: str, reason: str):
+#     """
+#     Callback fired by network layer on blocking or VPN disconnection.
+#     
+#     First detection  →  full console banner + alert sound + set _is_blocked = True
+#     Subsequent hits  →  compact one-line log (no sound, no banner spam)
+#     """
+#     global _is_blocked
+#
+#     timestamp = datetime.now().strftime("%H:%M:%S")
+#     general_log.critical(f"🚨 BLOCKING — {reason} — {url}")
+#
+#     with _alert_lock:
+#         if not _is_blocked:
+#             # ── First block in this disconnection event ──
+#             _is_blocked = True
+#             if ENABLE_ALERT:
+#                 print()
+#                 print("🚨" * 20)
+#                 print(f"  🚨🚨🚨  BLOCKING ALERT  [{timestamp}]  🚨🚨🚨")
+#                 print(f"  URL:    {url}")
+#                 print(f"  Reason: {reason}")
+#                 print("🚨" * 20)
+#                 print()
+#                 _play_alert_sound()
+#             else:
+#                 general_log.info(f"Block detected (alerts disabled): {url} — {reason}")
+#             general_log.info(f"Global blocked state: ON (first block at {url})")
+#         else:
+#             # ── Already blocked — compact output, NO sound ──
+#             if ENABLE_ALERT:
+#                 print(f"  🚨 [{timestamp}] Still blocked — {url} ({reason})")
+#             general_log.debug(f"Subsequent block (suppressed sound): {url}")
 
-_is_blocked = False               # Global state: True = currently in a blocked state
-_alert_lock = threading.Lock()    # Thread-safe guard for alert state
-
-def reset_blocking_state():
-    """Resets the blocked flag (called on successful network requests)."""
-    global _is_blocked
-    with _alert_lock:
-        if _is_blocked:
-            _is_blocked = False
-            general_log.info("Resetting global blocking state (successful request).")
-
-
-def _play_alert_sound():
-    """
-    Plays the alert sound ONCE for a new disconnection event.
-    Uses pygame at 80% volume; falls back to native Windows beep.
-    Called only when _is_blocked transitions from False → True.
-    Respects the ENABLE_ALERT toggle.
-    """
-    if not ENABLE_ALERT:
-        general_log.debug("Alert sound skipped (ENABLE_ALERT = False).")
-        return
-
-    def _play_worker():
-        # --- PHASE 1: Try Pygame (High Quality) ---
-        try:
-            import pygame
-
-            if not ALERT_SOUND_PATH.exists():
-                general_log.warning(f"Alert sound file not found: {ALERT_SOUND_PATH}")
-                # Fallthrough to winsound below
-            else:
-                if not pygame.mixer.get_init():
-                    pygame.mixer.init()
-
-                pygame.mixer.music.load(str(ALERT_SOUND_PATH.resolve()))
-                pygame.mixer.music.set_volume(0.80)
-                pygame.mixer.music.play()
-
-                while pygame.mixer.music.get_busy():
-                    pygame.time.Clock().tick(10)
-
-                general_log.info("🔊 Alert sound played via pygame at 80% volume.")
-                return  # Success!
-
-        except Exception as e:
-            general_log.warning(f"Pygame sound failed (falling back to winsound): {e}")
-
-        # --- PHASE 2: Fallback to Native Windows (Very Reliable) ---
-        if winsound:
-            try:
-                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                general_log.info("🔔 Alert sound played via Windows MessageBeep (fallback).")
-            except Exception as be:
-                general_log.error(f"Fallback sound also failed: {be}")
-        else:
-            print("\a")  # Final beep fallback
-            general_log.warning("No audio system available. Triggered system console beep (\\a).")
-
-    # Fire in background thread so it doesn't block scraping
-    threading.Thread(target=_play_worker, daemon=True).start()
-
-
-def reset_alert_for_new_session():
-    """Resets the alert state — call at the start of a session or a retry task."""
-    global _is_blocked
-    with _alert_lock:
-        _is_blocked = False
-    general_log.info("Alert and blocking state reset for new session.")
-
-
-# ─── Blocking / VPN Callback ─────────────────────────────────────────────────
-
+# Stub replacements so call sites don't break
 def on_blocking_detected(url: str, reason: str):
-    """
-    Callback fired by network layer on blocking or VPN disconnection.
-    
-    First detection  →  full console banner + alert sound + set _is_blocked = True
-    Subsequent hits  →  compact one-line log (no sound, no banner spam)
-    """
-    global _is_blocked
-
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    """No-op stub — alarm system commented out."""
     general_log.critical(f"🚨 BLOCKING — {reason} — {url}")
 
-    with _alert_lock:
-        if not _is_blocked:
-            # ── First block in this disconnection event ──
-            _is_blocked = True
-            if ENABLE_ALERT:
-                print()
-                print("🚨" * 20)
-                print(f"  🚨🚨🚨  BLOCKING ALERT  [{timestamp}]  🚨🚨🚨")
-                print(f"  URL:    {url}")
-                print(f"  Reason: {reason}")
-                print("🚨" * 20)
-                print()
-                _play_alert_sound()
-            else:
-                general_log.info(f"Block detected (alerts disabled): {url} — {reason}")
-            general_log.info(f"Global blocked state: ON (first block at {url})")
-        else:
-            # ── Already blocked — compact output, NO sound ──
-            if ENABLE_ALERT:
-                print(f"  🚨 [{timestamp}] Still blocked — {url} ({reason})")
-            general_log.debug(f"Subsequent block (suppressed sound): {url}")
+def reset_blocking_state():
+    """No-op stub — alarm system commented out."""
+    pass
+
+def reset_alert_for_new_session():
+    """No-op stub — alarm system commented out."""
+    pass
 
 
 def detect_mode(url: str) -> str:
