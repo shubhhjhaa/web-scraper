@@ -586,13 +586,26 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
     """
     general_log.info("Starting deep business profile extraction...")
     profile = {}
+    text_content = soup.get_text(separator=" ")
+
+    # Extract JSON-LD for cross-verification
+    json_ld_data = extract_json_ld(soup)
+    json_ld_dict = {}
+    if json_ld_data:
+        for item in json_ld_data:
+            if isinstance(item, dict):
+                json_ld_dict.update(item)
 
     # Extract Page Title / Name
     name = soup.find("h1").get_text(strip=True) if soup.find("h1") else extract_title(soup)
+    if not name and "name" in json_ld_dict:
+        name = json_ld_dict["name"]
     profile["name"] = name
 
     # About / Description
     about = extract_description(soup)
+    if not about and "description" in json_ld_dict:
+        about = json_ld_dict["description"]
     profile["about"] = about
     profile["owner"] = find_owner(about)
 
@@ -600,20 +613,36 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
     profile["verified"] = bool(soup.find(string=re.compile(r'verified', re.I))) or "Verified" in str(soup)
     profile["rating"] = extract_ratings(soup)
 
-    # Contact (Phone/Email)
-    text_content = soup.get_text(separator=" ")
+    # Credentials (ABN) extracted early to avoid phone conflict
+    profile["abn"] = find_abn(text_content)
     
-    tel_el = soup.find("a", href=re.compile(r'^tel:', re.I))
-    if tel_el:
-        profile["phone"] = tel_el["href"].replace("tel:", "").strip()
+    # Contact (Phone/Email)
+    if "telephone" in json_ld_dict:
+        profile["phone"] = str(json_ld_dict["telephone"])
     else:
-        profile["phone"] = PHONE_GENERIC.search(text_content).group(0) if PHONE_GENERIC.search(text_content) else None
+        tel_el = soup.find("a", href=re.compile(r'^tel:', re.I))
+        if tel_el:
+            profile["phone"] = tel_el["href"].replace("tel:", "").strip()
+        else:
+            profile["phone"] = None
+            for match in PHONE_GENERIC.finditer(text_content):
+                p = match.group(0).strip()
+                # If the stripped number matches the ABN, skip it
+                if profile["abn"] and re.sub(r'\D', '', p) == profile["abn"]:
+                    continue
+                if len(re.sub(r'\D', '', p)) < 8:
+                    continue
+                profile["phone"] = p
+                break
 
-    mail_el = soup.find("a", href=re.compile(r'^mailto:', re.I))
-    if mail_el:
-        profile["email"] = mail_el["href"].replace("mailto:", "").strip()
+    if "email" in json_ld_dict:
+        profile["email"] = str(json_ld_dict["email"])
     else:
-        profile["email"] = EMAIL_GENERIC.search(text_content).group(0) if EMAIL_GENERIC.search(text_content) else None
+        mail_el = soup.find("a", href=re.compile(r'^mailto:', re.I))
+        if mail_el:
+            profile["email"] = mail_el["href"].replace("mailto:", "").split("?")[0].strip()
+        else:
+            profile["email"] = EMAIL_GENERIC.search(text_content).group(0) if EMAIL_GENERIC.search(text_content) else None
 
     # Established
     est_match = re.search(r'(?:established|since|founded)\s*(?:in\s*)?([12]\d{3})', text_content, re.I)
@@ -621,79 +650,242 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
 
     # Services
     services_set = set()
-    srv_headings = soup.find_all(re.compile(r'^h[2-5]$'), string=re.compile(r'services|specialties|what we do|categories', re.I))
-    for h in srv_headings:
-        next_ul = h.find_next_sibling('ul') or h.find_next('ul')
-        if next_ul:
-            for li in next_ul.find_all('li'):
-                txt = li.get_text(strip=True)
-                if txt and len(txt) < 80:
-                    services_set.add(txt)
-    # Fallback to looking for class name indicating services
+    
+    # Hipages specific: section with id='services' or 'service-categories' containing links or list items
+    hipages_srv = soup.find(id=re.compile(r'services|service-categories', re.I))
+    if hipages_srv:
+        for a in hipages_srv.find_all('a'):
+            txt = a.get_text(separator=" ", strip=True)
+            # Exclude location-specific SEO links like "Electricians in Jerrabomberra"
+            if txt and len(txt) < 50 and " in " not in txt.lower():
+                services_set.add(txt)
+                
+    # Generic structured headings
+    if not services_set:
+        srv_headings = soup.find_all(re.compile(r'^h[2-5]$'), string=re.compile(r'services|specialties|what we do|categories', re.I))
+        for h in srv_headings:
+            next_ul = h.find_next_sibling('ul') or h.find_next('ul')
+            if next_ul:
+                for li in next_ul.find_all('li'):
+                    txt = li.get_text(separator=" ", strip=True)
+                    if txt and len(txt) < 80:
+                        services_set.add(txt)
+                        
+    # Fallback to class names
     if not services_set:
         for el in soup.find_all(class_=re.compile(r'service-item|category-item', re.I)):
-            txt = el.get_text(strip=True)
+            txt = el.get_text(separator=" ", strip=True)
             if txt and len(txt) < 60:
                 services_set.add(txt)
+                
     profile["services"] = list(services_set)
 
-    # Location
-    profile["address"] = None # Placeholder for smarter detection below
+    # Location Priority Extraction
+    profile["address"] = None
     profile["city"] = None
+    profile["state"] = None
     profile["postcode"] = None
 
-    # Look for Address patterns (e.g. 123 Street, Suburb, State Postcode)
-    addr_match = re.search(r'(\d+[^,\n]+,\s*[^,\n]+,\s*[A-Z]{2,3}\s*(\d{4}))', text_content)
-    map_link = soup.find("a", href=re.compile(r'maps\.google', re.I))
-    
-    if map_link and map_link.get_text(strip=True):
-        profile["address"] = map_link.get_text(strip=True)
-    elif addr_match:
-        profile["address"] = addr_match.group(1).strip()
-        profile["postcode"] = addr_match.group(2)
+    # 1. JSON-LD address (most reliable if present)
+    if "address" in json_ld_dict:
+        addr = json_ld_dict["address"]
+        if isinstance(addr, dict):
+            profile["address"] = addr.get("streetAddress")
+            profile["city"] = addr.get("addressLocality")
+            profile["state"] = addr.get("addressRegion")
+            profile["postcode"] = addr.get("postalCode")
+        elif isinstance(addr, str):
+            profile["address"] = addr
+
+    # 2. Hipages-specific: "Based in <Suburb> <STATE> <Postcode>"
+    if not profile["city"] or not profile["postcode"]:
+        based_in = re.search(
+            r'[Bb]ased\s+in\s+([A-Za-z\s]+?)\s+([A-Z]{2,3})\s+(\d{4})',
+            text_content
+        )
+        if based_in:
+            if not profile["city"]:
+                profile["city"] = based_in.group(1).strip()
+            if not profile["state"]:
+                profile["state"] = based_in.group(2).strip()
+            if not profile["postcode"]:
+                profile["postcode"] = based_in.group(3).strip()
+
+    # 3. Google Maps link fallback
+    if not profile["address"] and not profile["city"]:
+        map_link = soup.find("a", href=re.compile(r'maps\.google', re.I))
+        if map_link and map_link.get_text(strip=True):
+            profile["address"] = map_link.get_text(strip=True)
+
+    # 4. Generic regex fallback: "Suburb, STATE Postcode" or "123 Street, Suburb STATE Postcode"
+    if not profile["city"] and not profile["postcode"]:
+        addr_match = re.search(
+            r'((?:\d+\b[^,\n]+,\s*)?([A-Za-z][A-Za-z\s]{2,30}?)\s+([A-Z]{2,3})\s+(\d{4}))',
+            text_content
+        )
+        if addr_match:
+            if not profile["address"]:
+                profile["address"] = addr_match.group(1).strip()
+            if not profile["city"]:
+                profile["city"] = addr_match.group(2).strip()
+            if not profile["state"]:
+                profile["state"] = addr_match.group(3).strip()
+            if not profile["postcode"]:
+                profile["postcode"] = addr_match.group(4).strip()
 
     # Media (Logo + Gallery)
     images = extract_images(soup, base_url=target_url)
     profile["logo"] = images[0]["URL"] if images else None
     profile["gallery"] = [img["URL"] for img in images[1:10]]
 
-    # Credentials (ABN + Licenses)
-    profile["abn"] = find_abn(text_content)
-    
+    # Credentials (Licenses)
     licenses = {}
-    lic_matches = LICENSE_PATTERN.findall(text_content)
-    # Filter and deduplicate
-    for l in lic_matches:
-        if l and len(l) > 3:
-            licenses[f"license_{len(licenses)+1}"] = l.strip()
     
-    # Specific Arctick
-    arctick = ARCTICK_RE.search(text_content)
-    if arctick:
-        licenses["arctick"] = arctick.group(1)
+    # 1. Structured extraction (e.g. Hipages '#licences' block)
+    lic_div = soup.find(id=re.compile(r'licences|licenses|credentials', re.I))
+    if lic_div:
+        for li in lic_div.find_all('li'):
+            h3 = li.find(re.compile(r'h[2-4]|strong', re.I)) or li.find('div')
+            val_el = li.find('a') or li.find('span') or (li.find_all('div')[-1] if len(li.find_all('div')) > 1 else None)
+            if h3 and val_el:
+                name = h3.get_text(strip=True)
+                val = val_el.get_text(strip=True)
+                if name and val and name.lower() != 'abn':  
+                    # ABN is handled separately, prevent duplication here
+                    licenses[name.lower().replace(" ", "_")] = val
+
+    # 2. Regex Fallback (if no structured HTML section was found)
+    if not licenses:
+        lic_matches = LICENSE_PATTERN.findall(text_content)
+        seen_lic = set()
+        for l in lic_matches:
+            l_clean = re.sub(r'[^A-ZM0-9\-]', '', l.upper())
+            if len(l_clean) > 4 and l_clean not in seen_lic:
+                seen_lic.add(l_clean)
+                licenses[f"license_{len(licenses)+1}"] = l_clean
         
+        # Specific Arctick
+        arctick = ARCTICK_RE.search(text_content)
+        if arctick:
+            licenses["arctick"] = arctick.group(1)
+            
     profile["licenses"] = licenses
 
     # Reviews
     profile["reviews"] = []
-    # Heuristic: find nodes with names, dates, and review text
-    # Often structured as div > span(name), span(date), p(text)
-    review_blocks = soup.find_all(class_=re.compile(r'review|comment|testimonial', re.I))
-    for block in review_blocks[:5]: # Take top 5
-        rev = {
-            "name": None,
-            "location": None,
-            "date": None,
-            "comment": block.get_text(strip=True)[:200]
-        }
-        # Try to find specific parts inside block
-        name_el = block.find(class_=re.compile(r'author|user|name', re.I))
-        if name_el: rev["name"] = name_el.get_text(strip=True)
+    
+    # Strategy 1: Hipages text-pattern extraction
+    # Hipages review cards contain text like:
+    #   "JR\nJoanne R from Mawson, ACT\n29 Mar 2025\n\nComment text...\n\nElectricians\nhipages verified"
+    # We find all text blocks matching "Name from Suburb, STATE" and parse surrounding content
+    ratings_section = soup.find(id=re.compile(r'ratings|reviews|recommendations', re.I))
+    search_scope = ratings_section if ratings_section else soup
+    
+    review_pattern = re.compile(
+        r'([A-Z][a-z]+(?:\s[A-Z][a-z]?)?)\s+from\s+([A-Za-z]+(?:\s[A-Za-z]+)?),\s*([A-Z]{2,3})'
+    )
+    date_pattern = re.compile(r'\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}')
+    
+    # Walk through text nodes to find review cards
+    all_text_blocks = search_scope.find_all(['div', 'section', 'article'])
+    seen_reviews = set()
+    
+    for block in all_text_blocks:
+        block_text = block.get_text(separator="\n", strip=True)
         
-        date_el = block.find(class_=re.compile(r'date|timestamp', re.I))
-        if date_el: rev["date"] = date_el.get_text(strip=True)
+        # Must contain exactly one "from" pattern (single review card)
+        from_matches = list(review_pattern.finditer(block_text))
+        if len(from_matches) != 1:
+            continue
         
-        profile["reviews"].append(rev)
+        # Must contain a date
+        date_match = date_pattern.search(block_text)
+        if not date_match:
+            continue
+        
+        # Must be a leaf-level card (< 500 chars typically)
+        if len(block_text) > 500:
+            continue
+        
+        m = from_matches[0]
+        name = m.group(1).strip()
+        location = f"{m.group(2).strip()}, {m.group(3).strip()}"
+        date = date_match.group(0)
+        
+        # Deduplicate by name + date
+        review_key = f"{name}|{date}"
+        if review_key in seen_reviews:
+            continue
+        seen_reviews.add(review_key)
+        
+        # Extract comment: lines between date and badge lines
+        lines = [l.strip() for l in block_text.split("\n") if l.strip()]
+        comment = None
+        date_idx = None
+        for i, line in enumerate(lines):
+            if date_pattern.match(line):
+                date_idx = i
+                break
+        
+        if date_idx is not None:
+            comment_lines = []
+            for i in range(date_idx + 1, len(lines)):
+                line = lines[i]
+                # Stop at badge/tag lines
+                if line in ("Electricians", "Plumbers", "Builders") or \
+                   line.startswith("hipages") or line.startswith("Hired on"):
+                    break
+                if len(line) > 5:
+                    comment_lines.append(line)
+            if comment_lines:
+                comment = " ".join(comment_lines).strip()[:300]
+        
+        profile["reviews"].append({
+            "name": name,
+            "location": location,
+            "date": date,
+            "comment": comment
+        })
+    
+    # Strategy 2: Class-based DOM search (generic sites)
+    if not profile["reviews"]:
+        review_blocks = soup.find_all(class_=re.compile(r'review|comment|testimonial', re.I))
+        for block in review_blocks[:10]:
+            rev = {
+                "name": None,
+                "location": None,
+                "date": None,
+                "comment": block.get_text(strip=True)[:200]
+            }
+            name_el = block.find(class_=re.compile(r'author|user|name', re.I))
+            if name_el: rev["name"] = name_el.get_text(strip=True)
+            
+            date_el = block.find(class_=re.compile(r'date|timestamp', re.I))
+            if date_el: rev["date"] = date_el.get_text(strip=True)
+            
+            loc_el = block.find(class_=re.compile(r'location|city', re.I))
+            if loc_el: rev["location"] = loc_el.get_text(strip=True)
+            
+            if rev["comment"] and len(rev["comment"]) > 15 and "nav" not in [p.name for p in block.parents]:
+                profile["reviews"].append(rev)
+
+    # Strategy 3: JSON-LD reviews fallback
+    if not profile["reviews"] and "review" in json_ld_dict:
+        j_revs = json_ld_dict["review"]
+        if isinstance(j_revs, dict): j_revs = [j_revs]
+        if isinstance(j_revs, list):
+            for r in j_revs[:10]:
+                if isinstance(r, dict):
+                    author = r.get("author", {})
+                    profile["reviews"].append({
+                        "name": str(author.get("name", author) if isinstance(author, dict) else author),
+                        "location": None,
+                        "date": r.get("datePublished"),
+                        "comment": str(r.get("reviewBody", ""))[:200]
+                    })
+
+    # Limit to 10 most recent
+    profile["reviews"] = profile["reviews"][:10]
 
     return profile
 
@@ -725,6 +917,7 @@ def extract_business_profile_urls(soup: BeautifulSoup, target_url: str) -> list:
         href = a['href']
         if href.startswith("/"):
             href = urljoin(target_url, href)
+        href = href.split("?")[0].rstrip("/")
             
         lower_href = href.lower()
         if not lower_href.startswith("http"): continue

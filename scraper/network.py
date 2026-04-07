@@ -78,7 +78,7 @@ async def browser_initializer(
     playwright_instance,
     headless: bool = False,
     proxy: Optional[str] = None
-) -> tuple[Browser, BrowserContext]:
+) -> tuple[Browser, dict]:
     general_log.info(f"Initializing browser (headless={headless})...")
     profile = random.choice(DEVICE_PROFILES)
     locale = random.choice(LOCALES)
@@ -103,7 +103,7 @@ async def browser_initializer(
 
     browser = await playwright_instance.chromium.launch(**launch_args)
 
-    context = await browser.new_context(
+    context_kwargs = dict(
         user_agent=user_agent,
         viewport={"width": profile["width"], "height": profile["height"]},
         device_scale_factor=profile["device_scale_factor"],
@@ -113,7 +113,7 @@ async def browser_initializer(
         permissions=["geolocation"],
         color_scheme=random.choice(["light", "dark", "no-preference"]),
     )
-    return browser, context
+    return browser, context_kwargs
 
 # ─── Human Behavior Simulator ─────────────────────────────────────────────────
 
@@ -210,6 +210,7 @@ async def scroll_to_load_all(page: Page, max_scrolls: int = 5) -> None:
 
 async def reveal_hidden_content(page: Page) -> None:
     reveal_selectors = [
+        "button[data-ga-action='Reveal phone number']", # Hipages specific
         "button:has-text('Reveal')", "button:has-text('Show Number')",
         "button:has-text('View More')", "a:has-text('Show Number')",
         "[class*='reveal']", "button:has-text('Contact Details')"
@@ -220,7 +221,7 @@ async def reveal_hidden_content(page: Page) -> None:
             for btn in buttons:
                 if await btn.is_visible():
                     await btn.click()
-                    await asyncio.sleep(random.uniform(0.5, 1.0))
+                    await asyncio.sleep(random.uniform(1.0, 2.0)) # Slightly longer wait for network fetch
         except Exception:
             continue
 
@@ -236,12 +237,15 @@ fetch_retry = retry(
 @fetch_retry
 async def fetch_page(
     url: str,
-    context: BrowserContext,
+    browser: Browser,
+    context_kwargs: dict,
     on_blocking_detected: Optional[Callable] = None,
 ) -> str:
     general_log.info(f"Fetching: {url}")
+    context = None
     page = None
     try:
+        context = await browser.new_context(**context_kwargs)
         page = await context.new_page()
         await apply_stealth(page)
 
@@ -318,3 +322,5 @@ async def fetch_page(
     finally:
         if page:
             await page.close()
+        if context:
+            await context.close()

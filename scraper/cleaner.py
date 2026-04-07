@@ -53,6 +53,7 @@ PROFILE_SCHEMA = {
     "location": {
         "address": "",
         "city": "",
+        "state": "",
         "postcode": ""
     },
     "credentials": {
@@ -75,30 +76,68 @@ def clean_business_profile(raw_profile: dict) -> dict:
     """
     general_log.info("Cleaning business profile data...")
     
-    # Deep copy/init from schema
+    # ── Strict Validation Functions ──
+    def strict_phone(val):
+        v = normalize_text(val)
+        if not v: return None
+        # Discard invalid phones
+        if len(re.sub(r'\D', '', v)) < 8: return None
+        return v
+
+    def strict_email(val):
+        v = normalize_text(val)
+        if not v: return None
+        if "no-reply" in v.lower() or "noreply" in v.lower(): return None
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v): return None
+        return v
+
+    def strict_postcode(val):
+        v = normalize_text(val)
+        if not v: return None
+        v_num = re.sub(r'\D', '', v)
+        if len(v_num) == 4: return v_num
+        return None
+
+    def strict_abn(val):
+        v = normalize_text(val)
+        if not v: return None
+        v_num = re.sub(r'\D', '', v)
+        if len(v_num) == 11: return v_num
+        return None
+        
+    def strict_string(val):
+        v = normalize_text(val)
+        if not v: return None
+        vl = v.lower()
+        noise = ["faq", "directory", "navigation", "toggle menu", "skip to content"]
+        if any(n in vl for n in noise) and len(v) < 30: return None
+        return v
+
+    # Deep copy/init from schema with strict validations
     clean = {
         "business": {
-            "name": normalize_text(raw_profile.get("name")) or None,
-            "owner": normalize_text(raw_profile.get("owner")) or None,
+            "name": strict_string(raw_profile.get("name")),
+            "owner": strict_string(raw_profile.get("owner")),
             "established": raw_profile.get("established"),
-            "rating": raw_profile.get("rating"),
+            "rating": strict_string(raw_profile.get("rating")),
             "verified": raw_profile.get("verified"),
         },
         "contact": {
-            "phone": normalize_text(raw_profile.get("phone")) or None,
-            "email": normalize_text(raw_profile.get("email")) or None,
+            "phone": strict_phone(raw_profile.get("phone")),
+            "email": strict_email(raw_profile.get("email")),
         },
         "location": {
-            "address": normalize_text(raw_profile.get("address")) or None,
-            "city": normalize_text(raw_profile.get("city")) or None,
-            "postcode": normalize_text(raw_profile.get("postcode")) or None,
+            "address": strict_string(raw_profile.get("address")),
+            "city": strict_string(raw_profile.get("city")),
+            "state": strict_string(raw_profile.get("state")),
+            "postcode": strict_postcode(raw_profile.get("postcode")),
         },
         "credentials": {
-            "abn": normalize_text(raw_profile.get("abn")) or None,
+            "abn": strict_abn(raw_profile.get("abn")),
             "licenses": raw_profile.get("licenses", {}) or {},
         },
         "services": raw_profile.get("services", []) or [],
-        "about": normalize_text(raw_profile.get("about")) or None,
+        "about": strict_string(raw_profile.get("about")),
         "media": {
             "logo": raw_profile.get("logo") or None,
             "gallery": raw_profile.get("gallery", []) or [],
@@ -109,10 +148,10 @@ def clean_business_profile(raw_profile: dict) -> dict:
     # Clean reviews
     for rev in raw_profile.get("reviews", []):
         clean["reviews"].append({
-            "name": normalize_text(rev.get("name")) or None,
-            "location": normalize_text(rev.get("location")) or None,
-            "date": normalize_text(rev.get("date")) or None,
-            "comment": normalize_text(rev.get("comment")) or None,
+            "name": strict_string(rev.get("name")),
+            "location": strict_string(rev.get("location")),
+            "date": strict_string(rev.get("date")),
+            "comment": strict_string(rev.get("comment")),
         })
 
     return clean
