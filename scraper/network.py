@@ -209,19 +209,36 @@ async def scroll_to_load_all(page: Page, max_scrolls: int = 5) -> None:
     await asyncio.sleep(0.5)
 
 async def reveal_hidden_content(page: Page) -> None:
+    """Enables sequential clicking of 'Reveal' buttons to expose phone numbers/hidden text."""
     reveal_selectors = [
         "button[data-ga-action='Reveal phone number']", # Hipages specific
-        "button:has-text('Reveal')", "button:has-text('Show Number')",
-        "button:has-text('View More')", "a:has-text('Show Number')",
-        "[class*='reveal']", "button:has-text('Contact Details')"
+        "button:has-text('Reveal')", 
+        "button:has-text('Show Number')",
+        "button:has-text('View More')", 
+        "a:has-text('Show Number')",
+        "[class*='reveal']", 
+        "button:has-text('Contact Details')"
     ]
+    
     for sel in reveal_selectors:
         try:
+            # Re-query elements after each click to handle DOM mutations
             buttons = await page.query_selector_all(sel)
             for btn in buttons:
-                if await btn.is_visible():
-                    await btn.click()
-                    await asyncio.sleep(random.uniform(1.0, 2.0)) # Slightly longer wait for network fetch
+                try:
+                    if await btn.is_visible():
+                        # Scroll into view to ensure clickability
+                        await btn.scroll_into_view_if_needed()
+                        await btn.click(timeout=5000)
+                        # Randomized delay to prevent rapid-fire blocking
+                        await asyncio.sleep(random.uniform(1.5, 2.5))
+                        
+                        # Special check: If a modal appeared, wait for its content
+                        if await page.query_selector(".MuiDialog-root"):
+                            await asyncio.sleep(1.0) # Extra beat for modal load
+                except Exception as e:
+                    network_log.debug(f"Failed to click button with selector {sel}: {e}")
+                    continue
         except Exception:
             continue
 

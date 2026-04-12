@@ -10,7 +10,8 @@ from .logger import parsing_log, general_log
 
 ABN_PATTERN = re.compile(r'\b(\d{2}\s*\d{3}\s*\d{3}\s*\d{3})\b')
 LICENSE_PATTERN = re.compile(r'(?:Lic|License|Registration)(?:\s+No)?[:.\s]*([A-Z0-9\s\-]{5,15})', re.I)
-PHONE_GENERIC = re.compile(r'(\+?\(?\d{2,4}\)?[\s\.-]?\d{3,4}[\s\.-]?\d{3,4})')
+# AU specific: Mobile (04XX XXX XXX), Landline (02, 03, 07, 08), or +61
+PHONE_GENERIC = re.compile(r'((?:\+?61\s*|0)[23478]\s*(?:\d\s*){8,9})')
 EMAIL_GENERIC = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 
 # Specific for Australian Licenses (e.g., Arctick AU12345)
@@ -617,23 +618,64 @@ def extract_profile_data(soup: BeautifulSoup, target_url: str = "") -> dict:
     profile["abn"] = find_abn(text_content)
     
     # Contact (Phone/Email)
-    if "telephone" in json_ld_dict:
-        profile["phone"] = str(json_ld_dict["telephone"])
-    else:
-        tel_el = soup.find("a", href=re.compile(r'^tel:', re.I))
-        if tel_el:
-            profile["phone"] = tel_el["href"].replace("tel:", "").strip()
-        else:
-            profile["phone"] = None
-            for match in PHONE_GENERIC.finditer(text_content):
-                p = match.group(0).strip()
-                # If the stripped number matches the ABN, skip it
-                if profile["abn"] and re.sub(r'\D', '', p) == profile["abn"]:
-                    continue
-                if len(re.sub(r'\D', '', p)) < 8:
-                    continue
-                profile["phone"] = p
+    raw_phone = None
+    
+    # 1. Check for modal dialogs (often contains the revealed number)
+    modal = soup.find(class_=re.compile(r'MuiDialog|modal|dialog', re.I))
+    if modal:
+        modal_text = modal.get_text(separator=" ", strip=True)
+        phone_match = PHONE_GENERIC.search(modal_text)
+        if phone_match:
+            raw_phone = phone_match.group(0).strip()
+
+    # 2. Check JSON-LD
+    if not raw_phone:
+        if "telephone" in json_ld_dict and json_ld_dict["telephone"]:
+            raw_phone = str(json_ld_dict["telephone"])
+            
+    # 3. Check revealed tel: links (most common after click)
+    if not raw_phone:
+        tel_link = soup.find("a", href=re.compile(r'^tel:', re.I))
+        if tel_link:
+            raw_phone = tel_link["href"].replace("tel:", "").strip()
+
+    # 4. Global text regex
+    if not raw_phone:
+        # Sort matches by "looks like a phone number" (starts with 0 or +61)
+        matches = list(PHONE_GENERIC.finditer(text_content))
+        for match in matches:
+            p = match.group(0).strip()
+            digits = re.sub(r'\D', '', p)
+            # Avoid ABN collision
+            if profile["abn"] and digits == profile["abn"]:
+                continue
+            # Avoid generic license patterns (e.g. Arctick starts with AU or 20)
+            if digits.startswith('20') and len(digits) == 8:
+                continue
+            
+            if len(digits) >= 8:
+                raw_phone = p
                 break
+
+    # Clean and validate phone number to prevent noisy data (like "Multi Skilled Services...")
+    # and to avoid confusing 8-digit ACT licenses (e.g., "20241487") for local numbers.
+    profile["phone"] = None
+    if raw_phone:
+        alpha_count = sum(c.isalpha() for c in raw_phone)
+        digit_count = sum(c.isdigit() for c in raw_phone)
+        
+        extracted = raw_phone
+        # If it's noisy text, run regex to find the strict number chunk
+        if alpha_count > digit_count or digit_count < 8:
+            match = PHONE_GENERIC.search(raw_phone)
+            extracted = match.group(0).strip() if match else ""
+
+        digits = re.sub(r'\D', '', extracted)
+        # Ensure it has enough digits and is not an ACT builder/electrical license format
+        if len(digits) >= 8:
+            is_act_license = len(digits) in [8, 9] and digits.startswith('20')
+            if not is_act_license:
+                profile["phone"] = extracted
 
     if "email" in json_ld_dict:
         profile["email"] = str(json_ld_dict["email"])
@@ -917,7 +959,7 @@ def extract_business_profile_urls(soup: BeautifulSoup, target_url: str) -> list:
         href = a['href']
         if href.startswith("/"):
             href = urljoin(target_url, href)
-        href = href.split("?")[0].rstrip("/")
+        href = href.split("?")[0].split("#")[0].rstrip("/")
             
         lower_href = href.lower()
         if not lower_href.startswith("http"): continue

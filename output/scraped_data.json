@@ -1,0 +1,613 @@
+[
+    {
+        "business": {
+            "name": "No Faults Electrical",
+            "owner": null,
+            "established": 2021,
+            "rating": "5 /5",
+            "verified": true
+        },
+        "contact": {
+            "phone": "+61-410-838-145",
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "Jerrarbomberra",
+            "state": "NSW",
+            "postcode": "2619"
+        },
+        "credentials": {
+            "abn": "54114685591",
+            "licenses": {
+                "access_canberra": "202052",
+                "australian_refrigeration_council": "L201033"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Air Conditioning",
+            "Hot Water Systems",
+            "Electricians",
+            "Repairs & Maintenance"
+        ],
+        "about": "No Faults Electrical",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/3540001_3545000/3541094/thumbnail.gif",
+            "gallery": [
+                "https://img.hipages.com.au/unsafe/628x628/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2185001_2190000%2F2188037%2Foriginal_images%2F2270940.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2185001_2190000%2F2188037%2Foriginal_images%2F2270941.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2185001_2190000%2F2188037%2Foriginal_images%2F2278737.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2185001_2190000%2F2188037%2Foriginal_images%2F2278738.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2185001_2190000%2F2188037%2Foriginal_images%2F2278739.jpg"
+            ]
+        },
+        "reviews": [
+            {
+                "name": "Joanne R",
+                "location": "Mawson, ACT",
+                "date": "29 Mar 2025",
+                "comment": "Daniel was prompt, polite, genuine, clean and efficient. I cannot fault the work he did or our interactions with him."
+            },
+            {
+                "name": "Ruth W",
+                "location": "Karabar, NSW",
+                "date": "23 Jan 2025",
+                "comment": "Highly recommended! Daniel was awesome. Great communication and reliable."
+            },
+            {
+                "name": "Ricardo",
+                "location": "Belconnen, ACT",
+                "date": "21 Sep 2024",
+                "comment": "Very responsive, took the time to understand the work required, provided a quote, excellent communication at every step of the job, and importantly completed the job well and efficiently."
+            },
+            {
+                "name": "Anthony",
+                "location": "Ngunnawal, ACT",
+                "date": "11 Jun 2024",
+                "comment": "Connected with No Faults Electrical and would recommend them"
+            },
+            {
+                "name": "Nicole S",
+                "location": "Googong, NSW",
+                "date": "3 Feb 2024",
+                "comment": "Connected with No Faults Electrical and would recommend them"
+            },
+            {
+                "name": "Jarrod",
+                "location": "Queanbeyan, NSW",
+                "date": "12 Aug 2023",
+                "comment": "Great prompt service"
+            },
+            {
+                "name": "Heather D",
+                "location": "Gilmore, ACT",
+                "date": "24 Jun 2023",
+                "comment": "Prompt quote, on time & good job completed & cleaned up afterwards, highly recommend & a nice young man"
+            },
+            {
+                "name": "Marie K",
+                "location": "Macquarie, ACT",
+                "date": "8 Feb 2023",
+                "comment": "Connected with No Faults Electrical and would recommend them"
+            },
+            {
+                "name": "Jin",
+                "location": "Conder, ACT",
+                "date": "25 Aug 2022",
+                "comment": "Very reliable Electrical Lighting"
+            },
+            {
+                "name": "Castaly H",
+                "location": "Kingston, ACT",
+                "date": "31 Jul 2022",
+                "comment": "Daniel, is fabulous, punctual, communicates, does good work, and charges a fair price. Cleans up, well mannered and honest. Highly recommend No Faults Electrical."
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "A.G DESMOND & S.D DICKASON & R.M VERNON",
+            "owner": null,
+            "established": 2022,
+            "rating": "Member since 2022 Based in PAGE ACT 2614 Website",
+            "verified": true
+        },
+        "contact": {
+            "phone": "+61-402-551-777",
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "PAGE",
+            "state": "ACT",
+            "postcode": "2614"
+        },
+        "credentials": {
+            "abn": "88932201303",
+            "licenses": {
+                "access_canberra": "200413661"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Lighting",
+            "Electricians",
+            "Air Conditioning",
+            "Home Theatre",
+            "Underfloor Heating",
+            "Appliance Repairs",
+            "Hot Water Systems",
+            "Project Management",
+            "Ovens & Range Hoods",
+            "Appliance Installation"
+        ],
+        "about": "At Electrobots, we&rsquo;re reliable, experienced and affordable.",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/3620001_3625000/3620901/thumbnail.gif",
+            "gallery": []
+        },
+        "reviews": [
+            {
+                "name": "Carol I",
+                "location": "Gungahlin, ACT",
+                "date": "30 Oct 2025",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            },
+            {
+                "name": "Kim",
+                "location": "Symonston, ACT",
+                "date": "26 Aug 2025",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            },
+            {
+                "name": "Indika",
+                "location": "Casey, ACT",
+                "date": "29 Jul 2025",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            },
+            {
+                "name": "Jim K",
+                "location": "Stirling, ACT",
+                "date": "14 Jun 2025",
+                "comment": "Daniel turned up on time, and did the job requested. When I asked him how do I pay, he told me I'd get an invoice via eMail, which I did and paid. I think he did a good job, and he tested the work he did."
+            },
+            {
+                "name": "Lorraine L",
+                "location": "Fraser, ACT",
+                "date": "8 May 2025",
+                "comment": "Did a great job. I'm very happy with it all Lighting"
+            },
+            {
+                "name": "Rishi N",
+                "location": "Hughes, ACT",
+                "date": "7 Feb 2025",
+                "comment": "Great speed of quoting and a great job working with the neighbour to get the electrical work completed to the pole. Would highly recommend."
+            },
+            {
+                "name": "Jessica",
+                "location": "Charnwood, ACT",
+                "date": "6 Feb 2025",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            },
+            {
+                "name": "Cherryl",
+                "location": "Flynn, ACT",
+                "date": "20 Aug 2024",
+                "comment": "Yes they turned up when they said they would and explained what would need to happen. They were professional and easy to work with."
+            },
+            {
+                "name": "Sharon C",
+                "location": "Holt, ACT",
+                "date": "20 Aug 2024",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            },
+            {
+                "name": "Graeme K",
+                "location": "Charnwood, ACT",
+                "date": "19 Jun 2024",
+                "comment": "Connected with A.G DESMOND & S.D DICKASON & R.M VERNON and would recommend them"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "RISE & SHINE ELECTRICAL/LANDSCAPING SERVICES",
+            "owner": null,
+            "established": 2023,
+            "rating": "Member since 2023 Based in CHAPMAN ACT 2611",
+            "verified": true
+        },
+        "contact": {
+            "phone": "+61-407-507-450",
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "CHAPMAN",
+            "state": "ACT",
+            "postcode": "2611"
+        },
+        "credentials": {
+            "abn": "61637201822",
+            "licenses": {
+                "access_canberra": "20241487"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Lighting",
+            "Air Conditioning",
+            "Hot Water Systems",
+            "Electricians",
+            "EV Charger Installers"
+        ],
+        "about": "ALL THINGS ELECTRICAL AND LANDSCAPING IN CANBERRA&nbsp;",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/3805001_3810000/3806111/thumbnail.gif",
+            "gallery": [
+                "https://img.hipages.com.au/unsafe/628x628/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2410001_2415000%2F2411229%2Foriginal_images%2F3501116.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2410001_2415000%2F2411229%2Foriginal_images%2F3501128.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2410001_2415000%2F2411229%2Foriginal_images%2F3501117.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2410001_2415000%2F2411229%2Foriginal_images%2F3527269.jpg"
+            ]
+        },
+        "reviews": [
+            {
+                "name": "Scott",
+                "location": "Forde, ACT",
+                "date": "29 Mar 2026",
+                "comment": "Polite Prompt Service Humble Honest Advice and Service Electrical Lighting"
+            },
+            {
+                "name": "Kathryn K",
+                "location": "Yarralumla, ACT",
+                "date": "28 Nov 2025",
+                "comment": "Finn was excellent: very helpful, skilful and polite. I will definitely contact him again for my electrical needs. Electrical Repairs"
+            },
+            {
+                "name": "Michelle P",
+                "location": "Kingston, ACT",
+                "date": "24 Nov 2025",
+                "comment": "“Finn was lovely to deal with – responsive, on time, flexible with dates, and generous in not charging extra when the job turned out to be bigger than expected. The lights look great and everything works well. There were a few moments where the clean-up could have been a bit more careful, but he did"
+            },
+            {
+                "name": "Ben D",
+                "location": "Waramanga, ACT",
+                "date": "18 Nov 2025",
+                "comment": "Connected with RISE & SHINE ELECTRICAL/LANDSCAPING SERVICES and would recommend them Electrical Power Points"
+            },
+            {
+                "name": "Ray C",
+                "location": "Curtin, ACT",
+                "date": "4 Oct 2025",
+                "comment": "Connected with RISE & SHINE ELECTRICAL/LANDSCAPING SERVICES and would recommend them Electrical Power Points"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "Defrost Air Conditioning and Refrigeration",
+            "owner": null,
+            "established": 2023,
+            "rating": "Member since 2023 Servicing crestwood",
+            "verified": true
+        },
+        "contact": {
+            "phone": "+61-477-816-347",
+            "email": null
+        },
+        "location": {
+            "address": "edentials How we check Licences ABN 9267",
+            "city": "edentials How we check Licences",
+            "state": "ABN",
+            "postcode": "9267"
+        },
+        "credentials": {
+            "abn": "92673388031",
+            "licenses": {
+                "australian_refrigeration_council": "L174497",
+                "nsw_fair_trading": "396987C"
+            }
+        },
+        "services": [
+            "Heating Systems",
+            "Air Conditioning",
+            "Air Conditioner Cleaning",
+            "Repairs & Maintenance"
+        ],
+        "about": "Defrost Air Conditioning and Refrigeration",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/3820001_3825000/3821611/thumbnail.gif",
+            "gallery": []
+        },
+        "reviews": [
+            {
+                "name": "Karen L",
+                "location": "Lyons, ACT",
+                "date": "6 Feb 2026",
+                "comment": "Jack was very professional, came out on a public holiday and fixed my air conditioning within an hour, right before the heat wave! The price was also very reasonable compared to other quotes Air Conditioning"
+            },
+            {
+                "name": "Amanda",
+                "location": "Marulan, NSW",
+                "date": "10 Dec 2025",
+                "comment": "Communication was clear and precise. Job done well. Would recommend Jack. Air Conditioning"
+            },
+            {
+                "name": "Richard S",
+                "location": "Queanbeyan, NSW",
+                "date": "30 Nov 2025",
+                "comment": "One of the nicest tradies I’ve had was on time and did the job o time and very professional Split System Air Conditioning"
+            },
+            {
+                "name": "Caroline O",
+                "location": "Richardson, ACT",
+                "date": "27 Nov 2025",
+                "comment": "Arrived a little early which was amazing and had our air con fixed quickly. Very happy with the service Air Conditioner Service"
+            },
+            {
+                "name": "Kim Z",
+                "location": "Bowral, NSW",
+                "date": "11 Feb 2024",
+                "comment": "Very friendly fellow who efficiently completed the job. Air Conditioning"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "MOHSEN RAHIMZADEH",
+            "owner": null,
+            "established": 2025,
+            "rating": "Member since 2025 Based in BRUCE ACT 2617",
+            "verified": true
+        },
+        "contact": {
+            "phone": "+61-432-004-712",
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "BRUCE",
+            "state": "ACT",
+            "postcode": "2617"
+        },
+        "credentials": {
+            "abn": "67635647048",
+            "licenses": {
+                "act_planning_and_land_authority": "2024332"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Lighting",
+            "Air Conditioning",
+            "Home Theatre",
+            "Hot Water Systems",
+            "Foxtel, TV & Satellite",
+            "Antenna Services",
+            "Electricians",
+            "EV Charger Installers",
+            "Appliance Installation"
+        ],
+        "about": "MOHSEN RAHIMZADEH",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/4025001_4030000/4029636/thumbnail.gif",
+            "gallery": []
+        },
+        "reviews": [
+            {
+                "name": "Blair",
+                "location": "Queanbeyan, NSW",
+                "date": "14 Oct 2025",
+                "comment": "Straight-forward, will call again Lighting Repairs"
+            },
+            {
+                "name": "Anonymous",
+                "location": "Strathnairn, ACT",
+                "date": "29 Sep 2025",
+                "comment": "Connected with MOHSEN RAHIMZADEH and would recommend them"
+            },
+            {
+                "name": "Adam M",
+                "location": "Evatt, ACT",
+                "date": "26 Jul 2025",
+                "comment": "Mohsen was great, provided a good price compared to others and did a very professional job. I would definitely get him around again if I need further electrical work"
+            },
+            {
+                "name": "Gary",
+                "location": "Scullin, ACT",
+                "date": "19 Jul 2025",
+                "comment": "Highly recommend"
+            },
+            {
+                "name": "Sayed",
+                "location": "Tralee, ACT",
+                "date": "11 Jul 2025",
+                "comment": "Very professional, highly experienced, attention to details, clearly knows what he is doing and finishes task with perfection"
+            },
+            {
+                "name": "Darren B",
+                "location": "Palmerston, ACT",
+                "date": "6 Jul 2025",
+                "comment": "Lovely friendly chap, who was very happy to help out. I would highly recommend. Electrical Power Points"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "CODY STURGISS ELECTRICAL",
+            "owner": null,
+            "established": null,
+            "rating": "1 positive recommendation 1 hire on hipages",
+            "verified": true
+        },
+        "contact": {
+            "phone": null,
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "CHARNWOOD",
+            "state": "ACT",
+            "postcode": "2615"
+        },
+        "credentials": {
+            "abn": "13130474424",
+            "licenses": {
+                "access_canberra": "202616"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Lighting",
+            "Air Conditioning",
+            "Underfloor Heating",
+            "Electricians",
+            "EV Charger Installers",
+            "Appliance Installation"
+        ],
+        "about": "CODY STURGISS ELECTRICAL",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/4125001_4130000/4126930/thumbnail.gif",
+            "gallery": []
+        },
+        "reviews": [
+            {
+                "name": "Yhet N",
+                "location": "Bruce, ACT",
+                "date": "21 Feb 2026",
+                "comment": "Cody did fantastic job. Arrived on time, has great experience and skills, respond promptly in time, and charge reasonable price. Electrical Switchboards"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "Capital Valley Homes Pty Ltd",
+            "owner": null,
+            "established": 2024,
+            "rating": "Member since 2024 Based in MITCHELL ACT 2911",
+            "verified": true
+        },
+        "contact": {
+            "phone": null,
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "MITCHELL",
+            "state": "ACT",
+            "postcode": "2911"
+        },
+        "credentials": {
+            "abn": "88640745428",
+            "licenses": {
+                "australian_refrigeration_council": "L203405",
+                "access_canberra": "2025531"
+            }
+        },
+        "services": [
+            "Painters",
+            "Air Conditioner Cleaning",
+            "Extensions & Additions",
+            "Insulation",
+            "Air Conditioning",
+            "Hot Water Systems",
+            "Building",
+            "Electricians",
+            "EV Charger Installers"
+        ],
+        "about": "Capital Valley Homes Pty Ltd",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/3915001_3920000/3919216/thumbnail.gif",
+            "gallery": [
+                "https://img.hipages.com.au/unsafe/628x628/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2505001_2510000%2F2506282%2Foriginal_images%2F3265302.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2505001_2510000%2F2506282%2Foriginal_images%2F3265303.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2505001_2510000%2F2506282%2Foriginal_images%2F3265304.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2505001_2510000%2F2506282%2Foriginal_images%2F3265305.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2505001_2510000%2F2506282%2Foriginal_images%2F3265306.jpg"
+            ]
+        },
+        "reviews": [
+            {
+                "name": "David W",
+                "location": "Gordon, ACT",
+                "date": "8 Oct 2025",
+                "comment": "Connected with Capital Valley Homes Pty Ltd and would recommend them Air Conditioning Installation"
+            },
+            {
+                "name": "Lin L",
+                "location": "Brindabella, ACT",
+                "date": "29 Sep 2025",
+                "comment": "Connected with Capital Valley Homes Pty Ltd and would recommend them Insulation"
+            },
+            {
+                "name": "Kieren H",
+                "location": "Waramanga, ACT",
+                "date": "11 Jul 2025",
+                "comment": "Great work, although keeps calling for payment even though it’s been paid, I can’t make bank transfers go through any faster… Air Conditioning"
+            },
+            {
+                "name": "Catherine A",
+                "location": "Gordon, ACT",
+                "date": "23 Apr 2025",
+                "comment": "Competitive quote and could do the work quickly. Supply & Install Floor Insulation"
+            },
+            {
+                "name": "Florence L",
+                "location": "Ainslie, ACT",
+                "date": "15 Mar 2025",
+                "comment": "Connected with Capital Valley Homes Pty Ltd and would recommend them Insulation"
+            }
+        ]
+    },
+    {
+        "business": {
+            "name": "4 Front Electrical",
+            "owner": null,
+            "established": null,
+            "rating": "New to hipages Based in BANKS ACT 2906 Website",
+            "verified": true
+        },
+        "contact": {
+            "phone": null,
+            "email": null
+        },
+        "location": {
+            "address": null,
+            "city": "BANKS",
+            "state": "ACT",
+            "postcode": "2906"
+        },
+        "credentials": {
+            "abn": "63568499553",
+            "licenses": {
+                "australian_refrigeration_council": "L217972",
+                "access_canberra": "20201618"
+            }
+        },
+        "services": [
+            "Air Conditioner Cleaning",
+            "Repairs & Maintenance",
+            "Air Conditioning",
+            "Appliance Repairs",
+            "Foxtel, TV & Satellite",
+            "Appliance Installation",
+            "Electricians",
+            "EV Charger Installers",
+            "Antenna Services"
+        ],
+        "about": "4 Front Electrical",
+        "media": {
+            "logo": "https://mediacache.homeimprovementpages.com.au/creative/sites/4130001_4135000/4132477/thumbnail.gif",
+            "gallery": [
+                "https://img.hipages.com.au/unsafe/628x628/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2705001_2710000%2F2706364%2Foriginal_images%2F3675401.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2705001_2710000%2F2706364%2Foriginal_images%2F3675403.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2705001_2710000%2F2706364%2Foriginal_images%2F3675404.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2705001_2710000%2F2706364%2Foriginal_images%2F3675405.jpg",
+                "https://img.hipages.com.au/unsafe/300x300/smart/https%3A%2F%2Fmediacache.homeimprovementpages.com.au%2Fcreative%2Fgalleries%2F2705001_2710000%2F2706364%2Foriginal_images%2F3675406.jpg"
+            ]
+        },
+        "reviews": []
+    }
+]
